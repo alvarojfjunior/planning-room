@@ -2,46 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
-import { io, Socket } from 'socket.io-client'
 import VotingCard from '@/components/VotingCard'
 import UserList from '@/components/UserList'
 import IssueManager from '@/components/IssueManager'
 import JoinRoomModal from '@/components/JoinRoomModal'
 import PendingUsersModal from '@/components/PendingUsersModal'
 import { saveAs } from 'file-saver'
+import AblyService from '@/lib/ably'
+import type { User, PendingUser, Issue, RoomData } from '@/lib/ably'
 
-interface User {
-  id: string
-  name: string
-  role: 'participant' | 'spectator'
-  isHost: boolean
-}
 
-interface PendingUser {
-  id: string
-  name: string
-  role: 'participant' | 'spectator'
-  socketId: string
-}
-
-interface Issue {
-  id: string
-  title: string
-  description: string
-  votes: Record<string, number>
-  isCompleted: boolean
-  finalEstimate?: number
-}
-
-interface RoomData {
-  name: string
-  users: User[]
-  pendingUsers: PendingUser[]
-  currentIssue: Issue | null
-  issues: Issue[]
-  votes: Record<string, number>
-  votingRevealed: boolean
-}
 
 export default function RoomPage() {
   const params = useParams()
@@ -50,7 +20,7 @@ export default function RoomPage() {
   const roomId = params?.roomId as string
   const roomName = searchParams?.get('roomName')
   
-  const [socket, setSocket] = useState<Socket | null>(null)
+  const [ablyService, setAblyService] = useState<AblyService | null>(null)
   const [roomData, setRoomData] = useState<RoomData | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [userVote, setUserVote] = useState<number | null>(null)
@@ -60,59 +30,54 @@ export default function RoomPage() {
   const [waitingForApproval, setWaitingForApproval] = useState<boolean>(false)
   const [approvalMessage, setApprovalMessage] = useState<string>('')
 
-  const initializeSocket = (user: User) => {
-    // Initialize socket connection
-    const socketInstance = io(process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000', {
-      path: '/api/socket',
-    })
-
-    socketInstance.on('connect', () => {
-      console.log('Connected to server')
-      // Update current user with socket ID
-      const updatedUser = { ...user, id: socketInstance.id || '' }
-      setCurrentUser(updatedUser)
-      
-      socketInstance.emit('join-room', {
-        roomId,
-        user: updatedUser,
-        roomName: roomName || roomData?.name || `Room ${roomId}`
-      })
-    })
-
-    socketInstance.on('room-updated', (data: RoomData) => {
+  const initializeAbly = async (user: User) => {
+    // Create a new instance of AblyService to avoid conflicts between multiple users in the same browser
+    const service = new AblyService()
+    
+    // Update current user with client ID
+    const updatedUser = { ...user, id: service.getClientId() }
+    setCurrentUser(updatedUser)
+    
+    // Join room
+    await service.joinRoom(roomId, updatedUser, roomName || roomData?.name || `Room ${roomId}`)
+    
+    // Subscribe to room updates
+    const unsubscribeRoomUpdates = service.subscribeToRoomUpdates(roomId, (data: RoomData) => {
       setRoomData(data)
       // Reset user vote if voting was reset
       if (!data.votingRevealed && Object.keys(data.votes).length === 0) {
         setUserVote(null)
       }
     })
-
-    socketInstance.on('pending-user-request', (pendingUser: PendingUser) => {
-      setShowPendingModal(true)
+    
+    // Subscribe to approval events
+    const unsubscribeApproval = service.subscribeToApprovalEvents((data: any) => {
+      if (data.type === 'pending-request') {
+        setShowPendingModal(true)
+      } else if (data.type === 'granted') {
+        setWaitingForApproval(false)
+        setApprovalMessage('')
+      } else if (data.type === 'rejected') {
+        setWaitingForApproval(false)
+        setApprovalMessage(data.message)
+        setTimeout(() => {
+          router.push('/')
+        }, 3000)
+      }
     })
-
-    socketInstance.on('waiting-for-approval', (data: { message: string }) => {
+    
+    // If user is not host, show waiting for approval
+    if (!user.isHost) {
       setWaitingForApproval(true)
-      setApprovalMessage(data.message)
-    })
-
-    socketInstance.on('approval-granted', () => {
-      setWaitingForApproval(false)
-      setApprovalMessage('')
-    })
-
-    socketInstance.on('approval-rejected', (data: { message: string }) => {
-      setWaitingForApproval(false)
-      setApprovalMessage(data.message)
-      setTimeout(() => {
-        router.push('/')
-      }, 3000)
-    })
-
-    setSocket(socketInstance)
-
+      setApprovalMessage('Waiting for host approval...')
+    }
+    
+    setAblyService(service)
+    
     return () => {
-      socketInstance.disconnect()
+      unsubscribeRoomUpdates()
+      unsubscribeApproval()
+      service.disconnect()
     }
   }
 
@@ -129,9 +94,10 @@ export default function RoomPage() {
     setCurrentUser(user)
     setShowJoinModal(false)
     
-    // Initialize socket connection
-    const cleanup = initializeSocket(user)
-    return cleanup
+    // Initialize Ably connection
+    initializeAbly(user).then(cleanup => {
+      return cleanup
+    })
   }
 
   useEffect(() => {
@@ -153,10 +119,14 @@ export default function RoomPage() {
       setCurrentUser(user)
       setShowJoinModal(false)
       
-      // Initialize socket connection
-      const cleanup = initializeSocket(user)
+      // Initialize Ably connection
+      let cleanup: (() => void) | undefined
       
-      // Cleanup function to disconnect socket when component unmounts or dependencies change
+      initializeAbly(user).then(cleanupFn => {
+        cleanup = cleanupFn
+      })
+      
+      // Cleanup function to disconnect Ably when component unmounts or dependencies change
       return () => {
         if (cleanup) cleanup()
       }
@@ -167,39 +137,39 @@ export default function RoomPage() {
   }, [roomId, roomName, router, searchParams])
 
   const handleVote = (vote: number) => {
-    if (socket && currentUser?.role === 'participant' && !roomData?.votingRevealed) {
+    if (ablyService && currentUser?.role === 'participant' && !roomData?.votingRevealed) {
       setUserVote(vote)
-      socket.emit('vote', { roomId, vote })
+      ablyService.vote(roomId, vote)
     }
   }
 
   const handleNextRound = () => {
-    if (socket) {
-      socket.emit('next-round', { roomId })
+    if (ablyService) {
+      ablyService.nextRound(roomId)
     }
   }
 
   const handleCreateIssue = (issue: { title: string; description: string }) => {
-    if (socket) {
-      socket.emit('create-issue', { roomId, issue })
+    if (ablyService) {
+      ablyService.createIssue(roomId, issue)
     }
   }
 
   const handleEditIssue = (issueId: string, updates: Partial<Issue>) => {
-    if (socket) {
-      socket.emit('edit-issue', { roomId, issueId, updates })
+    if (ablyService) {
+      ablyService.editIssue(roomId, issueId, updates)
     }
   }
 
   const handleDeleteIssue = (issueId: string) => {
-    if (socket) {
-      socket.emit('delete-issue', { roomId, issueId })
+    if (ablyService) {
+      ablyService.deleteIssue(roomId, issueId)
     }
   }
 
   const handleSelectIssue = (issueId: string) => {
-    if (socket) {
-      socket.emit('select-issue', { roomId, issueId })
+    if (ablyService) {
+      ablyService.selectIssue(roomId, issueId)
     }
   }
 
@@ -248,14 +218,14 @@ export default function RoomPage() {
   }
 
   const handleApproveUser = (userId: string) => {
-    if (socket) {
-      socket.emit('approve-user', { roomId, pendingUserId: userId })
+    if (ablyService) {
+      ablyService.approveUser(roomId, userId)
     }
   }
 
   const handleRejectUser = (userId: string) => {
-    if (socket) {
-      socket.emit('reject-user', { roomId, pendingUserId: userId })
+    if (ablyService) {
+      ablyService.rejectUser(roomId, userId)
     }
   }
 

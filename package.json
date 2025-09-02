@@ -9,18 +9,17 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "ably": "^2.12.0",
+    "file-saver": "^2.0.5",
     "next": "15.5.2",
     "react": "^18",
-    "react-dom": "^18",
-    "socket.io": "^4.7.5",
-    "socket.io-client": "^4.7.5",
-    "file-saver": "^2.0.5"
+    "react-dom": "^18"
   },
   "devDependencies": {
+    "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@types/file-saver": "^2.0.7",
     "autoprefixer": "^10.4.20",
     "eslint": "^8",
     "eslint-config-next": "15.5.2",
