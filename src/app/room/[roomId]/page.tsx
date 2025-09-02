@@ -68,12 +68,13 @@ export default function RoomPage() {
 
     socketInstance.on('connect', () => {
       console.log('Connected to server')
+      // Update current user with socket ID
+      const updatedUser = { ...user, id: socketInstance.id || '' }
+      setCurrentUser(updatedUser)
+      
       socketInstance.emit('join-room', {
         roomId,
-        user: {
-          ...user,
-          id: socketInstance.id
-        },
+        user: updatedUser,
         roomName: roomName || roomData?.name || `Room ${roomId}`
       })
     })
@@ -90,9 +91,9 @@ export default function RoomPage() {
       setShowPendingModal(true)
     })
 
-    socketInstance.on('waiting-for-approval', (message: string) => {
+    socketInstance.on('waiting-for-approval', (data: { message: string }) => {
       setWaitingForApproval(true)
-      setApprovalMessage(message)
+      setApprovalMessage(data.message)
     })
 
     socketInstance.on('approval-granted', () => {
@@ -100,9 +101,9 @@ export default function RoomPage() {
       setApprovalMessage('')
     })
 
-    socketInstance.on('approval-denied', (message: string) => {
+    socketInstance.on('approval-rejected', (data: { message: string }) => {
       setWaitingForApproval(false)
-      setApprovalMessage(message)
+      setApprovalMessage(data.message)
       setTimeout(() => {
         router.push('/')
       }, 3000)
@@ -153,7 +154,12 @@ export default function RoomPage() {
       setShowJoinModal(false)
       
       // Initialize socket connection
-      initializeSocket(user)
+      const cleanup = initializeSocket(user)
+      
+      // Cleanup function to disconnect socket when component unmounts or dependencies change
+      return () => {
+        if (cleanup) cleanup()
+      }
     } else {
       // User is accessing via direct link, show join modal
       setShowJoinModal(true)
@@ -243,13 +249,13 @@ export default function RoomPage() {
 
   const handleApproveUser = (userId: string) => {
     if (socket) {
-      socket.emit('approve-user', { roomId, userId })
+      socket.emit('approve-user', { roomId, pendingUserId: userId })
     }
   }
 
   const handleRejectUser = (userId: string) => {
     if (socket) {
-      socket.emit('reject-user', { roomId, userId })
+      socket.emit('reject-user', { roomId, pendingUserId: userId })
     }
   }
 

@@ -45,6 +45,19 @@ interface RoomData {
 
 const rooms: Record<string, RoomData> = {}
 
+// Helper function to emit room updates only to approved users
+function emitRoomUpdate(io: SocketIOServer, roomId: string) {
+  if (rooms[roomId]) {
+    const approvedUserIds = rooms[roomId].users.map(u => u.id)
+    approvedUserIds.forEach(userId => {
+      const userSocket = io.sockets.sockets.get(userId)
+      if (userSocket) {
+        userSocket.emit('room-updated', rooms[roomId])
+      }
+    })
+  }
+}
+
 export const config = {
   api: {
     bodyParser: false,
@@ -84,20 +97,36 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
           }
         }
 
-        const existingUserIndex = rooms[roomId].users.findIndex(u => u.id === socket.id)
-        const isFirstUser = rooms[roomId].users.length === 0
+        // Check if user is already connected with a different socket ID
+        const existingUserIndex = rooms[roomId].users.findIndex(u => u.name === user.name)
+        const isFirstUser = rooms[roomId].users.length === 0 && rooms[roomId].pendingUsers.length === 0
         
         if (existingUserIndex >= 0) {
-          // User is already in the room, just update their info
-          rooms[roomId].users[existingUserIndex] = { ...user, id: socket.id, isHost: rooms[roomId].users[existingUserIndex].isHost }
+          // User is reconnecting - update their socket ID but don't duplicate
+          const existingUser = rooms[roomId].users[existingUserIndex]
+          rooms[roomId].users[existingUserIndex] = { 
+            ...existingUser, 
+            id: socket.id 
+          }
           socket.join(roomId)
-          io.to(roomId).emit('room-updated', rooms[roomId])
+          emitRoomUpdate(io, roomId)
         } else if (isFirstUser) {
-          // First user becomes host automatically
+          // First user becomes host automatically (ignore client isHost value)
           rooms[roomId].users.push({ ...user, id: socket.id, isHost: true })
           socket.join(roomId)
-          io.to(roomId).emit('room-updated', rooms[roomId])
+          emitRoomUpdate(io, roomId)
         } else {
+          // Check if user is already in pending list
+          const existingPendingIndex = rooms[roomId].pendingUsers.findIndex(u => u.name === user.name)
+          if (existingPendingIndex >= 0) {
+            // Update existing pending user's socket ID
+            rooms[roomId].pendingUsers[existingPendingIndex].socketId = socket.id
+            socket.emit('waiting-for-approval', {
+              message: 'Waiting for host approval to join the room...'
+            })
+            return
+          }
+          
           // Add user to pending list for approval
           const pendingUser: PendingUser = {
             id: Math.random().toString(36).substring(2, 9),
@@ -109,12 +138,14 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
           rooms[roomId].pendingUsers.push(pendingUser)
           
           // Notify host about pending user
-          const hostSocket = rooms[roomId].users.find(u => u.isHost)
-          if (hostSocket) {
-            io.to(roomId).emit('pending-user-request', {
-              pendingUser,
-              roomData: rooms[roomId]
-            })
+          const hostUser = rooms[roomId].users.find(u => u.isHost)
+          if (hostUser) {
+            const hostSocket = io.sockets.sockets.get(hostUser.id)
+            if (hostSocket) {
+              hostSocket.emit('pending-user-request', {
+                pendingUser
+              })
+            }
           }
           
           // Send waiting message to the requesting user
@@ -127,6 +158,12 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
       socket.on('approve-user', (data: { roomId: string; pendingUserId: string }) => {
         const { roomId, pendingUserId } = data
         if (rooms[roomId]) {
+          // Check if the user is the host
+          const currentUser = rooms[roomId].users.find(u => u.id === socket.id)
+          if (!currentUser || !currentUser.isHost) {
+            return
+          }
+          
           const pendingUserIndex = rooms[roomId].pendingUsers.findIndex(u => u.id === pendingUserId)
           if (pendingUserIndex >= 0) {
             const pendingUser = rooms[roomId].pendingUsers[pendingUserIndex]
@@ -149,7 +186,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
               userSocket.emit('approval-granted')
             }
             
-            io.to(roomId).emit('room-updated', rooms[roomId])
+            emitRoomUpdate(io, roomId)
           }
         }
       })
@@ -157,6 +194,12 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
       socket.on('reject-user', (data: { roomId: string; pendingUserId: string }) => {
         const { roomId, pendingUserId } = data
         if (rooms[roomId]) {
+          // Check if the user is the host
+          const currentUser = rooms[roomId].users.find(u => u.id === socket.id)
+          if (!currentUser || !currentUser.isHost) {
+            return
+          }
+          
           const pendingUserIndex = rooms[roomId].pendingUsers.findIndex(u => u.id === pendingUserId)
           if (pendingUserIndex >= 0) {
             const pendingUser = rooms[roomId].pendingUsers[pendingUserIndex]
@@ -172,7 +215,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
               })
             }
             
-            io.to(roomId).emit('room-updated', rooms[roomId])
+            emitRoomUpdate(io, roomId)
           }
         }
       })
@@ -190,7 +233,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
           if (!rooms[roomId].currentIssue) {
             rooms[roomId].currentIssue = newIssue
           }
-          io.to(roomId).emit('room-updated', rooms[roomId])
+          emitRoomUpdate(io, roomId)
         }
       })
 
@@ -203,7 +246,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
             if (rooms[roomId].currentIssue?.id === issueId) {
               rooms[roomId].currentIssue = rooms[roomId].issues[issueIndex]
             }
-            io.to(roomId).emit('room-updated', rooms[roomId])
+            emitRoomUpdate(io, roomId)
           }
         }
       })
@@ -215,7 +258,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
           if (rooms[roomId].currentIssue?.id === issueId) {
             rooms[roomId].currentIssue = rooms[roomId].issues[0] || null
           }
-          io.to(roomId).emit('room-updated', rooms[roomId])
+          emitRoomUpdate(io, roomId)
         }
       })
 
@@ -230,7 +273,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
               rooms[roomId].currentIssue = issue
               rooms[roomId].votes = {}
               rooms[roomId].votingRevealed = false
-              io.to(roomId).emit('room-updated', rooms[roomId])
+              emitRoomUpdate(io, roomId)
             }
           }
         }
@@ -255,7 +298,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
             }
           }
           
-          io.to(roomId).emit('room-updated', rooms[roomId])
+          emitRoomUpdate(io, roomId)
         }
       })
 
@@ -277,7 +320,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
             rooms[roomId].votes = {}
             rooms[roomId].votingRevealed = false
             
-            io.to(roomId).emit('room-updated', rooms[roomId])
+            emitRoomUpdate(io, roomId)
           }
         }
       })
@@ -286,13 +329,22 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseS
         console.log('User disconnected:', socket.id)
         
         Object.keys(rooms).forEach(roomId => {
+          const disconnectedUser = rooms[roomId].users.find(u => u.id === socket.id)
+          const wasHost = disconnectedUser?.isHost || false
+          
           rooms[roomId].users = rooms[roomId].users.filter(u => u.id !== socket.id)
+          rooms[roomId].pendingUsers = rooms[roomId].pendingUsers.filter(u => u.socketId !== socket.id)
           delete rooms[roomId].votes[socket.id]
           
-          if (rooms[roomId].users.length === 0) {
+          // If the host disconnected, transfer host to the next user
+          if (wasHost && rooms[roomId].users.length > 0) {
+            rooms[roomId].users[0].isHost = true
+          }
+          
+          if (rooms[roomId].users.length === 0 && rooms[roomId].pendingUsers.length === 0) {
             delete rooms[roomId]
           } else {
-            io.to(roomId).emit('room-updated', rooms[roomId])
+            emitRoomUpdate(io, roomId)
           }
         })
       })
