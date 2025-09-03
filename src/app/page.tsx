@@ -1,103 +1,121 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { CreateRoomModal } from '@/components/CreateRoomModal';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  return (
+    <main className="min-h-screen relative overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 px-4">
+      {/* Decorative elements */}
+      <div className="absolute top-20 -left-32 w-64 h-64 bg-purple-500/30 rounded-full blur-3xl animate-blob"></div>
+      <div className="absolute top-40 -right-32 w-64 h-64 bg-blue-500/30 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+      <div className="absolute -bottom-32 left-1/2 transform -translate-x-1/2 w-64 h-64 bg-pink-500/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+
+      {/* Playing card decorative elements */}
+      <div className="absolute top-10 right-10 w-16 h-20 bg-white/5 rounded-lg transform rotate-12 border border-white/10"></div>
+      <div className="absolute bottom-10 left-10 w-16 h-20 bg-white/5 rounded-lg transform -rotate-6 border border-white/10"></div>
+
+      <div className="max-w-5xl mx-auto py-20 relative z-10">
+        <div className="text-center mb-16">
+          <h1 className="text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-blue-500 animate-expand">
+            Planning Poker
+          </h1>
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-12">
+            Collaborate with your team in real-time to estimate tasks efficiently and make better decisions together.
+          </p>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="
+              relative px-8 py-4 text-lg font-medium rounded-xl overflow-hidden group
+              bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600
+              hover-glow transform transition-all duration-300
+              hover:scale-105 focus:scale-105
+              focus:outline-none focus:ring-2 focus:ring-purple-500/50
+            "
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 animate-gradient-xy opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <span className="relative flex items-center gap-2">
+              Create New Room
+              <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </span>
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        <div className="grid md:grid-cols-3 gap-8">
+          {/* Feature cards with poker theme */}
+          <div className="
+            relative p-6 rounded-2xl
+            bg-gradient-to-br from-gray-800/50 to-gray-900/50
+            border border-gray-700/50 backdrop-blur-sm
+            card-transition group
+          ">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
+            <div className="relative">
+              <div className="w-12 h-12 mb-4 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2 text-white group-hover:text-purple-400 transition-colors">
+                Anonymous Voting
+              </h3>
+              <p className="text-gray-400 group-hover:text-gray-300 transition-colors">
+                Keep estimations unbiased with secret voting until everyone has made their choice.
+              </p>
+            </div>
+          </div>
+
+          <div className="
+            relative p-6 rounded-2xl
+            bg-gradient-to-br from-gray-800/50 to-gray-900/50
+            border border-gray-700/50 backdrop-blur-sm
+            card-transition group
+          ">
+            <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
+            <div className="relative">
+              <div className="w-12 h-12 mb-4 rounded-lg bg-pink-500/20 flex items-center justify-center">
+                <svg className="w-6 h-6 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2 text-white group-hover:text-pink-400 transition-colors">
+                Real-time
+              </h3>
+              <p className="text-gray-400 group-hover:text-gray-300 transition-colors">
+                Experience seamless collaboration with instant updates and live participant tracking.
+              </p>
+            </div>
+          </div>
+
+          <div className="
+            relative p-6 rounded-2xl
+            bg-gradient-to-br from-gray-800/50 to-gray-900/50
+            border border-gray-700/50 backdrop-blur-sm
+            card-transition group
+          ">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
+            <div className="relative">
+              <div className="w-12 h-12 mb-4 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2 text-white group-hover:text-blue-400 transition-colors">
+                Instant Results
+              </h3>
+              <p className="text-gray-400 group-hover:text-gray-300 transition-colors">
+                Watch as votes are revealed with engaging animations and clear visualizations.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <CreateRoomModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </main>
   );
 }
